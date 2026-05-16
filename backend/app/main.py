@@ -7,8 +7,10 @@ import io
 from .database import engine, Base, get_db
 from .models import AgriculturalLog
 from .gemini_client import process_audio_with_gemini
+from .services.matching import find_intelligent_matches
+from .services.safety import predict_market_safety
 
-app = FastAPI(title="HallaMarket Backend")
+app = FastAPI(title="MarketMinder AI Backend")
 
 @app.on_event("startup")
 async def startup():
@@ -127,6 +129,28 @@ async def get_records(db: AsyncSession = Depends(get_db)):
     from sqlalchemy import select
     result = await db.execute(select(AgriculturalLog).order_by(AgriculturalLog.timestamp.desc()))
     return result.scalars().all()
+
+@app.get("/api/matches")
+async def get_matches(db: AsyncSession = Depends(get_db)):
+    """
+    Returns intelligent supply-demand matches.
+    """
+    matches = await find_intelligent_matches(db)
+    return {"matches": matches, "count": len(matches)}
+
+@app.get("/api/safety/{location}")
+async def get_market_safety(location: str):
+    """
+    Returns predictive safety status for a location.
+    """
+    # Mock community reports for simulation
+    mock_reports = [
+        "Path clear for Santa corridor",
+        "Market open fine today",
+        "No trouble for road"
+    ]
+    prediction = await predict_market_safety(location, mock_reports)
+    return prediction
 
 @app.get("/logs")
 async def get_logs(db: AsyncSession = Depends(get_db)):

@@ -35,31 +35,40 @@ const HUBS = [
 
 function App() {
   const [records, setRecords] = useState([]);
+  const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isOffline, setIsOffline] = useState(false);
 
   // Polling logic: fetch every 10 seconds
   useEffect(() => {
-    const fetchRecords = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/records');
-        if (response.ok) {
-          const data = await response.json();
-          setRecords(data);
-          setIsOffline(false);
-        } else {
-          setIsOffline(true);
+        const [recordsRes, matchesRes] = await Promise.all([
+          fetch('http://localhost:8000/api/records'),
+          fetch('http://localhost:8000/api/matches')
+        ]);
+
+        if (recordsRes.ok) {
+          const recordsData = await recordsRes.json();
+          setRecords(recordsData);
         }
+        
+        if (matchesRes.ok) {
+          const matchesData = await matchesRes.json();
+          setMatches(matchesData.matches || []);
+        }
+
+        setIsOffline(!recordsRes.ok);
       } catch (error) {
-        console.error("Error fetching records:", error);
+        console.error("Error fetching data:", error);
         setIsOffline(true);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchRecords();
-    const interval = setInterval(fetchRecords, 10000);
+    fetchData();
+    const interval = setInterval(fetchData, 10000);
     return () => clearInterval(interval);
   }, []);
 
@@ -77,8 +86,8 @@ function App() {
       {/* Header */}
       <header className="px-8 py-6 border-b border-slate-800 flex justify-between items-center glass-panel">
         <div>
-          <h1 className="text-2xl font-bold text-emerald-500 tracking-tight">HallaMarket <span className="text-slate-400 font-light">| Command Center</span></h1>
-          <p className="text-xs text-slate-500 uppercase tracking-widest mt-1">Bamenda Supply Chain Resilience Engine</p>
+          <h1 className="text-2xl font-bold text-emerald-500 tracking-tight">MarketMinder AI <span className="text-slate-400 font-light">| Command Center</span></h1>
+          <p className="text-xs text-slate-500 uppercase tracking-widest mt-1">AI-Driven Supply Chain Resilience</p>
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
@@ -151,46 +160,82 @@ function App() {
         </aside>
 
         {/* Center: Map Canvas */}
-        <section className="flex-1 p-6 relative">
-          <div className="absolute top-10 right-10 z-[1000] flex flex-col gap-2">
-            <div className="glass-panel p-3 rounded-lg border border-slate-700 shadow-2xl">
-              <h3 className="text-xs font-bold uppercase text-slate-500 mb-2 tracking-tighter">Corridor Status</h3>
-              <div className="space-y-2">
-                <StatusItem color="bg-emerald-500" label="Active Supply" />
-                <StatusItem color="bg-amber-500" label="High Risk / Unverified" />
-                <StatusItem color="bg-red-500" label="Disrupted Corridor" />
+        <section className="flex-1 p-6 relative flex flex-col gap-6">
+          <div className="flex-1 relative">
+            <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
+              <div className="glass-panel p-3 rounded-lg border border-slate-700 shadow-2xl">
+                <h3 className="text-xs font-bold uppercase text-slate-500 mb-2 tracking-tighter">Corridor Status</h3>
+                <div className="space-y-2">
+                  <StatusItem color="bg-emerald-500" label="Active Supply" />
+                  <StatusItem color="bg-amber-500" label="High Risk / Unverified" />
+                  <StatusItem color="bg-red-500" label="Disrupted Corridor" />
+                </div>
               </div>
+            </div>
+
+            <div className="w-full h-full rounded-2xl overflow-hidden border border-slate-800 shadow-inner">
+              <MapContainer center={[5.961, 10.158]} zoom={11} scrollWheelZoom={true}>
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                />
+                {HUBS.map((hub) => (
+                  <React.Fragment key={hub.name}>
+                    <Marker position={hub.coords}>
+                      <Popup>
+                        <div className="text-slate-900 font-sans">
+                          <strong className="text-lg">{hub.name}</strong><br />
+                          <span className="text-sm opacity-70">Supply Index: {hub.supply}</span>
+                        </div>
+                      </Popup>
+                    </Marker>
+                    <Circle 
+                      center={hub.coords} 
+                      radius={1500} 
+                      pathOptions={{ 
+                        fillColor: getStatusColor(hub.status), 
+                        color: getStatusColor(hub.status),
+                        fillOpacity: 0.2
+                      }} 
+                    />
+                  </React.Fragment>
+                ))}
+              </MapContainer>
             </div>
           </div>
 
-          <div className="w-full h-full rounded-2xl overflow-hidden border border-slate-800 shadow-inner">
-            <MapContainer center={[5.961, 10.158]} zoom={11} scrollWheelZoom={true}>
-              <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-              />
-              {HUBS.map((hub) => (
-                <React.Fragment key={hub.name}>
-                  <Marker position={hub.coords}>
-                    <Popup>
-                      <div className="text-slate-900 font-sans">
-                        <strong className="text-lg">{hub.name}</strong><br />
-                        <span className="text-sm opacity-70">Supply Index: {hub.supply}</span>
+          {/* AI Matching Panel */}
+          <div className="glass-panel rounded-2xl p-6 border border-slate-800 h-64 overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-sm font-semibold uppercase text-slate-400 flex items-center gap-2">
+                <TrendingUp size={16} className="text-emerald-500" />
+                Intelligent Supply-Demand Matching
+              </h2>
+              <span className="text-xs text-emerald-500/80 font-bold">{matches.length} Matches Found</span>
+            </div>
+            <div className="flex-1 overflow-x-auto">
+              <div className="flex gap-4 pb-2">
+                {matches.length === 0 ? (
+                  <div className="text-slate-600 italic text-sm py-8">Waiting for AI to detect gluts/shortages...</div>
+                ) : (
+                  matches.map((match, i) => (
+                    <div key={i} className="min-w-[280px] p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500/10 transition-all group">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-xs font-bold text-emerald-500 uppercase">High Probability Match</span>
+                        <span className="text-[10px] text-slate-500">{Math.round(match.match_score * 100)}% Match</span>
                       </div>
-                    </Popup>
-                  </Marker>
-                  <Circle 
-                    center={hub.coords} 
-                    radius={1500} 
-                    pathOptions={{ 
-                      fillColor: getStatusColor(hub.status), 
-                      color: getStatusColor(hub.status),
-                      fillOpacity: 0.2
-                    }} 
-                  />
-                </React.Fragment>
-              ))}
-            </MapContainer>
+                      <div className="text-sm font-bold mb-1">{match.crop}</div>
+                      <div className="text-xs text-slate-400">
+                        {match.supply_loc} Supply ➔ {match.demand_loc} Demand
+                      </div>
+                      <button className="mt-3 w-full py-1.5 bg-emerald-500/20 hover:bg-emerald-500 text-emerald-500 hover:text-slate-900 rounded-lg text-[10px] font-bold transition-all uppercase">
+                        Generate Dispatch Note
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </section>
       </main>
